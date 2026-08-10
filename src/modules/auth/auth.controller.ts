@@ -1,0 +1,158 @@
+import {
+    Controller, Post, Get, Patch, Delete,
+    Body, Param, UseGuards, HttpCode, HttpStatus, Req,
+} from '@nestjs/common';
+import type { Request } from 'express';
+
+import { AuthService } from './auth.service';
+import { JwtRefreshGuard } from '../../common/guards/jwt-refresh.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import {
+    Public, Roles, RequirePermissions, CurrentUser,
+} from '../../common/decorators/Rbac.decorator';
+import {
+    RegisterSuperOwnerDto,
+    CreateUserDto,
+    LoginDto,
+    RefreshTokenDto,
+    UpdateUserRoleDto,
+} from '../../common/dto/index.dto';
+import { Role, Permission } from '../../common/enums/role.enum';
+import type { RequestUser } from '../../common/interfaces/jwt.interface';
+
+@Controller('auth')
+@UseGuards(RolesGuard, PermissionsGuard)
+export class AuthController {
+    constructor(private readonly authService: AuthService) { }
+
+    // ── Public routes (no JWT required) ──────────────────────────────────────
+
+    /**
+     * POST /auth/register
+     * Called ONCE when the software is purchased.
+     * Creates the Organisation + Super Owner account.
+     */
+    @Public()
+    @Post('register')
+    @HttpCode(HttpStatus.CREATED)
+    register(@Body() dto: RegisterSuperOwnerDto) {
+        return this.authService.registerSuperOwner(dto);
+    }
+
+    /**
+     * POST /auth/login
+     * Works identically for ALL roles — Super Owner, Owner, Manager, Worker, Viewer.
+     * Returns: { accessToken, refreshToken, expiresIn, user }
+     */
+    @Public()
+    @Post('login')
+    @HttpCode(HttpStatus.OK)
+    login(@Body() dto: LoginDto, @Req() req: Request) {
+        return this.authService.login(dto, req.headers['user-agent']);
+    }
+
+    /**
+     * POST /auth/refresh
+     * Send the refreshToken as: Authorization: Bearer <refreshToken>
+     * Returns a NEW { accessToken, refreshToken, expiresIn }.
+     * The old refresh token is immediately invalidated.
+     */
+    @Public()
+    @UseGuards(JwtRefreshGuard)
+    @Post('refresh')
+    @HttpCode(HttpStatus.OK)
+    refresh(@CurrentUser() tokenData: { userId: string; rawToken: string }) {
+        return this.authService.refresh(tokenData.rawToken);
+    }
+
+    // ── Protected routes ──────────────────────────────────────────────────────
+
+    /**
+     * POST /auth/logout
+     * Revokes the current user's refresh token (this device only).
+     */
+    @Post('logout')
+    @HttpCode(HttpStatus.OK)
+    logout(@CurrentUser() user: RequestUser) {
+        return this.authService.logout(user.id);
+    }
+
+    /**
+     * GET /auth/me
+     * Returns the authenticated user's profile and permissions.
+     */
+    @Get('me')
+    getMe(@CurrentUser() user: RequestUser) {
+        return user;
+    }
+
+    // ── User management (Owner and above) ─────────────────────────────────────
+
+    /**
+     * POST /auth/users
+     * Create a new user with an assigned role.
+     * Owner can create: Manager, Worker, Viewer.
+     * Manager can create: Worker, Viewer.
+     */
+    @Post('users')
+    @Roles(Role.MANAGER)
+    @RequirePermissions(Permission.CREATE_USER)
+    createUser(
+        @CurrentUser() actor: RequestUser,
+        @Body() dto: CreateUserDto,
+    ) {
+        return this.authService.createUser(actor, dto);
+    }
+
+    /**
+     * GET /auth/users
+     * List all users in the same organisation.
+     */
+    @Get('users')
+    @RequirePermissions(Permission.READ_USER)
+    listUsers(@CurrentUser() actor: RequestUser) {
+        return this.authService.listOrgUsers(actor);
+    }
+
+    /**
+     * GET /auth/users/:id
+     * Get a specific user by ID (same org only).
+     */
+    @Get('users/:id')
+    @RequirePermissions(Permission.READ_USER)
+    getUser(
+        @CurrentUser() actor: RequestUser,
+        @Param('id') userId: string,
+    ) {
+        return this.authService.getUserById(actor, userId);
+    }
+
+    /**
+     * PATCH /auth/users/role
+     * Change a user's role. Hierarchy rules enforced.
+     */
+    @Patch('users/role')
+    @Roles(Role.OWNER)
+    @RequirePermissions(Permission.ASSIGN_ROLE)
+    updateRole(
+        @CurrentUser() actor: RequestUser,
+        @Body() dto: UpdateUserRoleDto,
+    ) {
+        return this.authService.updateUserRole(actor, dto);
+    }
+
+    /**
+     * DELETE /auth/users/:id
+     * Deactivates the user and revokes all their sessions.
+     */
+    @Delete('users/:id')
+    @Roles(Role.MANAGER)
+    @RequirePermissions(Permission.DELETE_USER)
+    deactivateUser(
+        @CurrentUser() actor: RequestUser,
+        @Param('id') userId: string,
+    ) {
+        return this.authService.deactivateUser(actor, userId);
+    }
+}
