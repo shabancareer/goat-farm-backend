@@ -9,10 +9,12 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Organisation, OrganisationDocument } from '../organizations/schemas/organization.schema';
 import { TokenService } from './tokens.service';
+import { MailService } from '../../mail/mail.service';
 
 import { Role } from '../../common/enums/role.enum';
 
@@ -25,6 +27,8 @@ import {
     CreateUserDto,
     LoginDto,
     UpdateUserRoleDto,
+    VerifyEmailDto,
+    ResendVerificationDto,
 } from '../../common/dto/index.dto';
 
 @Injectable()
@@ -33,7 +37,16 @@ export class AuthService {
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
         @InjectModel(Organisation.name) private readonly orgModel: Model<OrganisationDocument>,
         private readonly tokenService: TokenService,
+        private readonly mailService: MailService,
     ) { }
+
+    // ── Helper: generate email verification token ─────────────────────────────
+    private generateEmailVerificationToken() {
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        return { rawToken, tokenHash, expiresAt };
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // STEP 1 — Called ONCE when the software is purchased
@@ -45,7 +58,10 @@ export class AuthService {
         // 1. Create the organisation
         const org = await this.orgModel.create({ name: dto.organizationName });
 
-        // 2. Create the super owner user
+        // 2. Generate verification token
+        const { rawToken, tokenHash, expiresAt } = this.generateEmailVerificationToken();
+
+        // 3. Create the super owner user
         const passwordHash = await bcrypt.hash(dto.password, 12);
         const user = await this.userModel.create({
             name: dto.name,
@@ -54,16 +70,80 @@ export class AuthService {
             role: Role.SUPER_OWNER,
             isSuperOwner: true,
             orgId: org._id,
+            isEmailVerified: false,
+            emailVerificationTokenHash: tokenHash,
+            emailVerificationExpiresAt: expiresAt,
         });
 
-        // 3. Link the org back to the super owner
+        // 4. Link the org back to the super owner
         await this.orgModel.findByIdAndUpdate(org._id, { superOwnerId: user._id });
 
+        // 5. Send verification email
+        try {
+            await this.mailService.sendVerificationEmail(user.email, user.name, rawToken);
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+        }
+
         return {
-            message: 'Super Owner account created successfully',
+            message: 'Super Owner account created successfully. Please check your email to verify your address.',
             userId: (user._id as any).toString(),
             orgId: (org._id as any).toString(),
         };
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // EMAIL VERIFICATION
+    // ══════════════════════════════════════════════════════════════════════════
+    async verifyEmail(dto: VerifyEmailDto) {
+        const tokenHash = crypto.createHash('sha256').update(dto.token).digest('hex');
+
+        const user = await this.userModel
+            .findOne({
+                emailVerificationTokenHash: tokenHash,
+                emailVerificationExpiresAt: { $gt: new Date() },
+            })
+            .select('+emailVerificationTokenHash +emailVerificationExpiresAt');
+
+        if (!user) {
+            throw new BadRequestException('Invalid or expired email verification token');
+        }
+
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+        user.emailVerificationTokenHash = null;
+        user.emailVerificationExpiresAt = null;
+
+        await user.save();
+
+        return { message: 'Email address verified successfully' };
+    }
+
+    async resendVerificationEmail(dto: ResendVerificationDto) {
+        const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+
+        if (!user) {
+            // Return success message to prevent user enumeration
+            return { message: 'If an account exists with this email, a verification link has been sent.' };
+        }
+
+        if (user.isEmailVerified) {
+            throw new BadRequestException('Email address is already verified');
+        }
+
+        const { rawToken, tokenHash, expiresAt } = this.generateEmailVerificationToken();
+
+        user.emailVerificationTokenHash = tokenHash;
+        user.emailVerificationExpiresAt = expiresAt;
+        await user.save();
+
+        try {
+            await this.mailService.sendVerificationEmail(user.email, user.name, rawToken);
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+        }
+
+        return { message: 'If an account exists with this email, a verification link has been sent.' };
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -129,6 +209,8 @@ export class AuthService {
         const emailTaken = await this.userModel.findOne({ email: dto.email.toLowerCase() });
         if (emailTaken) throw new ConflictException('Email is already registered');
 
+        const { rawToken, tokenHash, expiresAt } = this.generateEmailVerificationToken();
+
         const passwordHash = await bcrypt.hash(dto.password, 12);
         const user = await this.userModel.create({
             name: dto.name,
@@ -137,10 +219,19 @@ export class AuthService {
             role: dto.role,
             orgId: new Types.ObjectId(actor.orgId),
             createdBy: new Types.ObjectId(actor.id),
+            isEmailVerified: false,
+            emailVerificationTokenHash: tokenHash,
+            emailVerificationExpiresAt: expiresAt,
         });
 
+        try {
+            await this.mailService.sendVerificationEmail(user.email, user.name, rawToken);
+        } catch (error) {
+            console.error('Failed to send verification email:', error);
+        }
+
         return {
-            message: 'User created successfully',
+            message: 'User created successfully. Verification email sent.',
             userId: (user._id as any).toString(),
         };
     }
@@ -217,6 +308,8 @@ export class AuthService {
             role: user.role,
             isSuperOwner: user.isSuperOwner,
             isActive: user.isActive,
+            isEmailVerified: user.isEmailVerified,
+            emailVerifiedAt: user.emailVerifiedAt,
             orgId: user.orgId.toString(),
             phone: user.phone,
             photoUrl: user.photoUrl,
@@ -227,3 +320,4 @@ export class AuthService {
         };
     }
 }
+

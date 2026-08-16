@@ -89,3 +89,15 @@ export class ChangePasswordDto {
   @IsString() @MinLength(8)
   newPassword: string;
 }
+
+// ── Email Verification DTOs ───────────────────────────────────────────────────
+
+export class VerifyEmailDto {
+  @IsString() @IsNotEmpty()
+  token: string;
+}
+
+export class ResendVerificationDto {
+  @IsEmail()
+  email: string;
+}

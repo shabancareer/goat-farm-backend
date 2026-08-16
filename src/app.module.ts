@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAccessGuard } from './common/guards/jwt-access.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     // Import your modules
     GoatModule,
     AuthModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [

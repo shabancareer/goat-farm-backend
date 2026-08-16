@@ -1,7 +1,9 @@
+import { Reflector } from '@nestjs/core';
 import { JwtAccessGuard } from './jwt-access.guard';
 
 describe('JwtAccessGuard', () => {
   it('should be defined', () => {
-    expect(new JwtAccessGuard()).toBeDefined();
+    const reflector = new Reflector();
+    expect(new JwtAccessGuard(reflector)).toBeDefined();
   });
 });

@@ -1,8 +1,8 @@
 import {
     Controller, Post, Get, Patch, Delete,
-    Body, Param, UseGuards, HttpCode, HttpStatus, Req,
+    Body, Param, Query, UseGuards, HttpCode, HttpStatus, Req, Res,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 import { AuthService } from './auth.service';
 import { JwtRefreshGuard } from '../../common/guards/jwt-refresh.guard';
@@ -17,6 +17,8 @@ import {
     LoginDto,
     RefreshTokenDto,
     UpdateUserRoleDto,
+    VerifyEmailDto,
+    ResendVerificationDto,
 } from '../../common/dto/index.dto';
 import { Role, Permission } from '../../common/enums/role.enum';
 import type { RequestUser } from '../../common/interfaces/jwt.interface';
@@ -41,6 +43,35 @@ export class AuthController {
     }
 
     /**
+     * GET or POST /auth/verify-email
+     * Verifies user email with the token sent via email.
+     */
+    @Public()
+    @Get('verify-email')
+    async verifyEmailGet(@Query() dto: VerifyEmailDto, @Res() res: Response) {
+        await this.authService.verifyEmail(dto);
+        return res.redirect('http://localhost:5173/auth/login?verified=true');
+    }
+
+    @Public()
+    @Post('verify-email')
+    @HttpCode(HttpStatus.OK)
+    verifyEmailPost(@Body() dto: VerifyEmailDto) {
+        return this.authService.verifyEmail(dto);
+    }
+
+    /**
+     * POST /auth/resend-verification
+     * Resends email verification link to user.
+     */
+    @Public()
+    @Post('resend-verification')
+    @HttpCode(HttpStatus.OK)
+    resendVerification(@Body() dto: ResendVerificationDto) {
+        return this.authService.resendVerificationEmail(dto);
+    }
+
+    /**
      * POST /auth/login
      * Works identically for ALL roles — Super Owner, Owner, Manager, Worker, Viewer.
      * Returns: { accessToken, refreshToken, expiresIn, user }
@@ -48,33 +79,55 @@ export class AuthController {
     @Public()
     @Post('login')
     @HttpCode(HttpStatus.OK)
-    login(@Body() dto: LoginDto, @Req() req: Request) {
-        return this.authService.login(dto, req.headers['user-agent']);
+    async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        const result = await this.authService.login(dto, req.headers['user-agent']);
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            path: '/',
+        });
+        return result;
     }
 
     /**
      * POST /auth/refresh
-     * Send the refreshToken as: Authorization: Bearer <refreshToken>
-     * Returns a NEW { accessToken, refreshToken, expiresIn }.
-     * The old refresh token is immediately invalidated.
+     * Reads refreshToken from cookie or Bearer header.
+     * Sets new refreshToken cookie and returns new accessToken.
      */
     @Public()
     @UseGuards(JwtRefreshGuard)
     @Post('refresh')
     @HttpCode(HttpStatus.OK)
-    refresh(@CurrentUser() tokenData: { userId: string; rawToken: string }) {
-        return this.authService.refresh(tokenData.rawToken);
+    async refresh(
+        @CurrentUser() tokenData: { userId: string; rawToken: string },
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        const result = await this.authService.refresh(tokenData.rawToken);
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            path: '/',
+        });
+        return result;
     }
 
     // ── Protected routes ──────────────────────────────────────────────────────
 
     /**
      * POST /auth/logout
-     * Revokes the current user's refresh token (this device only).
+     * Revokes the current user's refresh token (this device only) & clears cookie.
      */
     @Post('logout')
     @HttpCode(HttpStatus.OK)
-    logout(@CurrentUser() user: RequestUser) {
+    async logout(
+        @CurrentUser() user: RequestUser,
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        res.clearCookie('refreshToken', { path: '/' });
         return this.authService.logout(user.id);
     }
 
@@ -156,3 +209,4 @@ export class AuthController {
         return this.authService.deactivateUser(actor, userId);
     }
 }
+

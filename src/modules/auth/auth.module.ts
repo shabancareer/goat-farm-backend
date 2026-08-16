@@ -12,6 +12,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { TokenService } from './tokens.service';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { Organisation, OrganisationSchema } from '../organizations/schemas/organization.schema';
+import { MailModule } from '../../mail/mail.module';
 
 @Module({
     imports: [
@@ -21,6 +22,7 @@ import { Organisation, OrganisationSchema } from '../organizations/schemas/organ
             { name: User.name, schema: UserSchema },
             { name: Organisation.name, schema: OrganisationSchema },
         ]),
+        MailModule,
     ],
     controllers: [AuthController],
     providers: [
@@ -32,3 +34,4 @@ import { Organisation, OrganisationSchema } from '../organizations/schemas/organ
     exports: [AuthService, TokenService],
 })
 export class AuthModule { }
+
