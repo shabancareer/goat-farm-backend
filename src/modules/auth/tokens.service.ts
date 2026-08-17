@@ -28,7 +28,7 @@ export class TokenService {
             sub: (user._id as any).toString(),
             email: user.email,
             role: user.role,
-            orgId: user.orgId.toString(),
+            orgId: user.orgId ? user.orgId.toString() : undefined,
             isSuperOwner: user.isSuperOwner,
         };
 

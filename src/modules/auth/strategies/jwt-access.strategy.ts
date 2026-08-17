@@ -51,7 +51,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
             email: user.email,
             name: user.name,
             role: user.role,
-            orgId: user.orgId.toString(),
+            orgId: user.orgId ? user.orgId.toString() : undefined,
             isSuperOwner: user.isSuperOwner,
             permissions: ROLE_PERMISSIONS[user.role] ?? [],
             phone: user.phone,

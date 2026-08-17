@@ -41,7 +41,9 @@ export class GoatController {
         count: number;
         data: Goat[];
     }> {
-        const goats = await this.goatService.findAll(user?.orgId);
+        // Super Owner sees all goats; other roles filter by user's orgId
+        const orgIdFilter = user?.isSuperOwner ? undefined : user?.orgId;
+        const goats = await this.goatService.findAll(orgIdFilter);
 
         return {
             success: true,

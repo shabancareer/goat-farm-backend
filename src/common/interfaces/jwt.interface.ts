@@ -5,7 +5,7 @@ export interface JwtPayload {
     sub: string;           // MongoDB user _id as string
     email: string;
     role: Role;
-    orgId: string;           // Organisation _id as string
+    orgId?: string;           // Organisation _id as string
     isSuperOwner: boolean;
     type: 'access' | 'refresh';
     jti?: string;           // unique id — present only on refresh tokens
@@ -19,7 +19,7 @@ export interface RequestUser {
     email: string;
     name: string;
     role: Role;
-    orgId: string;
+    orgId?: string;
     isSuperOwner: boolean;
     permissions: Permission[];
     phone?: string;

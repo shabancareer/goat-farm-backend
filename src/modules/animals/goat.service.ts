@@ -130,7 +130,27 @@ export class GoatService {
 
     async findAll(orgId?: string): Promise<any[]> {
         try {
-            const query = orgId ? { orgId: new Types.ObjectId(orgId) } : {};
+            let query: any = {};
+            if (orgId) {
+                if (Types.ObjectId.isValid(orgId)) {
+                    query = {
+                        $or: [
+                            { orgId: new Types.ObjectId(orgId) },
+                            { orgId: orgId },
+                            { orgId: { $exists: false } },
+                            { orgId: null }
+                        ]
+                    };
+                } else {
+                    query = {
+                        $or: [
+                            { orgId: orgId },
+                            { orgId: { $exists: false } },
+                            { orgId: null }
+                        ]
+                    };
+                }
+            }
             const goats = await this.goatModel.find(query).lean();
 
             // Add calculated age to response
