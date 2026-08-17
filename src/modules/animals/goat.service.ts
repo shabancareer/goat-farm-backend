@@ -128,9 +128,10 @@ export class GoatService {
         }
     }
 
-    async findAll(): Promise<any[]> {
+    async findAll(orgId?: string): Promise<any[]> {
         try {
-            const goats = await this.goatModel.find().lean();
+            const query = orgId ? { orgId: new Types.ObjectId(orgId) } : {};
+            const goats = await this.goatModel.find(query).lean();
 
             // Add calculated age to response
             return goats.map((goat: any) => this.formatGoatResponse(goat));

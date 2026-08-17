@@ -10,6 +10,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { GoatModule } from './modules/animals/goat.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { UsersModule } from './modules/users/users.module';
 
 import { JwtAccessGuard } from './common/guards/jwt-access.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -59,6 +61,8 @@ import { MailModule } from './mail/mail.module';
     GoatModule,
     AuthModule,
     MailModule,
+    OrganizationsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

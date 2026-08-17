@@ -4,6 +4,9 @@ import { Document, Types } from 'mongoose';
 @Schema({ timestamps: true })
 export class Goat extends Document {
 
+    @Prop({ type: Types.ObjectId, ref: 'Organisation', required: false })
+    orgId: Types.ObjectId;
+
     @Prop({ required: true, unique: true })
     animalName: string;
 

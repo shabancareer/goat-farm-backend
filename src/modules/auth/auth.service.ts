@@ -225,13 +225,13 @@ export class AuthService {
         });
 
         try {
-            await this.mailService.sendVerificationEmail(user.email, user.name, rawToken);
+            await this.mailService.sendEmployeeInvitationEmail(user.email, user.name, rawToken, dto.password);
         } catch (error) {
-            console.error('Failed to send verification email:', error);
+            console.error('Failed to send employee invitation email:', error);
         }
 
         return {
-            message: 'User created successfully. Verification email sent.',
+            message: 'Employee created successfully. Invitation and verification email sent.',
             userId: (user._id as any).toString(),
         };
     }
