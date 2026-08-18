@@ -49,8 +49,12 @@ export class AuthController {
     @Public()
     @Get('verify-email')
     async verifyEmailGet(@Query() dto: VerifyEmailDto, @Res() res: Response) {
-        await this.authService.verifyEmail(dto);
-        return res.redirect('http://localhost:5173/auth/login?verified=true');
+        try {
+            await this.authService.verifyEmail(dto);
+            return res.redirect('http://localhost:5173/auth/login?verified=true');
+        } catch (error) {
+            return res.redirect('http://localhost:5173/auth/login?error=invalid_token');
+        }
     }
 
     @Public()

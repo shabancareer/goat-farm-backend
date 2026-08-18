@@ -41,9 +41,8 @@ export class GoatController {
         count: number;
         data: Goat[];
     }> {
-        // Super Owner sees all goats; other roles filter by user's orgId
-        const orgIdFilter = user?.isSuperOwner ? undefined : user?.orgId;
-        const goats = await this.goatService.findAll(orgIdFilter);
+        // All users (including Super Owners) view goats strictly filtered by active organization
+        const goats = await this.goatService.findAll(user?.orgId);
 
         return {
             success: true,
@@ -53,11 +52,14 @@ export class GoatController {
     }
 
     @Get(':id')
-    async findOne(@Param('id') id: string): Promise<{
+    async findOne(
+        @CurrentUser() user: RequestUser,
+        @Param('id') id: string,
+    ): Promise<{
         success: boolean;
         data: Goat;
     }> {
-        const goat = await this.goatService.findOne(id);
+        const goat = await this.goatService.findOne(id, user?.orgId);
 
         return {
             success: true,
@@ -66,12 +68,16 @@ export class GoatController {
     }
 
     @Put(':id')
-    async update(@Param('id') id: string, @Body() updateGoatDto: UpdateGoatDto): Promise<{
+    async update(
+        @CurrentUser() user: RequestUser,
+        @Param('id') id: string,
+        @Body() updateGoatDto: UpdateGoatDto,
+    ): Promise<{
         success: boolean;
         message: string;
         data: Goat;
     }> {
-        const updatedGoat = await this.goatService.update(id, updateGoatDto);
+        const updatedGoat = await this.goatService.update(id, updateGoatDto, user?.orgId);
 
         return {
             success: true,
@@ -81,12 +87,15 @@ export class GoatController {
     }
 
     @Delete(':id')
-    async remove(@Param('id') id: string): Promise<{
+    async remove(
+        @CurrentUser() user: RequestUser,
+        @Param('id') id: string,
+    ): Promise<{
         success: boolean;
         message: string;
         data: Goat;
     }> {
-        const deletedGoat = await this.goatService.remove(id);
+        const deletedGoat = await this.goatService.remove(id, user?.orgId);
         return {
             success: true,
             message: 'Goat deleted successfully',

@@ -28,7 +28,7 @@ export class MailService {
     }
 
     async sendEmployeeInvitationEmail(email: string, name: string, token: string, tempPassword?: string) {
-        const verifyUrl = `http://localhost:5173/auth/login?verified=true&token=${token}`;
+        const verifyUrl = `http://localhost:3000/auth/verify-email?token=${token}`;
 
         await this.mailerService.sendMail({
             to: email,

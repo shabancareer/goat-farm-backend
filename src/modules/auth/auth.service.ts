@@ -165,12 +165,16 @@ export class AuthService {
             throw new UnauthorizedException('Invalid email or password');
         }
 
+        if (!user.isEmailVerified) {
+            throw new UnauthorizedException('Email address is not verified. Please check your inbox and verify your email before logging in.');
+        }
+
         // Generate access + refresh token pair
         const tokens = await this.tokenService.generateTokenPair(user);
 
         return {
             ...tokens,
-            user: this.buildUserResponse(user),
+            user: await this.buildUserResponse(user),
         };
     }
 
@@ -243,7 +247,7 @@ export class AuthService {
             .sort({ createdAt: -1 })
             .exec();
 
-        return users.map((u) => this.buildUserResponse(u));
+        return Promise.all(users.map((u) => this.buildUserResponse(u)));
     }
 
     async updateUserRole(actor: RequestUser, dto: UpdateUserRoleDto) {
@@ -296,11 +300,43 @@ export class AuthService {
         }).select('-password -refreshTokenHash');
 
         if (!user) throw new NotFoundException('User not found');
-        return this.buildUserResponse(user);
+        return await this.buildUserResponse(user);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
-    private buildUserResponse(user: UserDocument) {
+    private async buildUserResponse(user: UserDocument) {
+        let orgName = 'Main Goat Farm';
+        let accessibleOrganizations: Array<{ id: string; name: string }> = [];
+
+        try {
+            const org = await this.orgModel.findById(user.orgId).exec();
+            if (org) {
+                orgName = org.name;
+            }
+
+            if (user.isSuperOwner) {
+                const orgs = await this.orgModel.find({
+                    $or: [
+                        { superOwnerId: user._id },
+                        { _id: user.orgId },
+                    ],
+                    isActive: true,
+                }).exec();
+
+                accessibleOrganizations = orgs.map((o) => ({
+                    id: (o._id as any).toString(),
+                    name: o.name,
+                }));
+            } else if (org) {
+                accessibleOrganizations = [{
+                    id: (org._id as any).toString(),
+                    name: org.name,
+                }];
+            }
+        } catch (e) {
+            console.error('Failed to populate organisation details for user response:', e);
+        }
+
         return {
             id: (user._id as any).toString(),
             name: user.name,
@@ -311,6 +347,8 @@ export class AuthService {
             isEmailVerified: user.isEmailVerified,
             emailVerifiedAt: user.emailVerifiedAt,
             orgId: user.orgId.toString(),
+            orgName,
+            accessibleOrganizations,
             phone: user.phone,
             photoUrl: user.photoUrl,
             isAvailable: user.isAvailable,

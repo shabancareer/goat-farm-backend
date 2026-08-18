@@ -13,7 +13,8 @@ export interface IGoat extends Document {
     breedType: string;
     motherId: number;
     fatherId: number;
-    partition: string;
+    orgId?: string | Types.ObjectId;
+    orgName?: string;
     site: string;
     purchasePrice: number;
     purchaseFrom: string;

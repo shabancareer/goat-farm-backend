@@ -114,8 +114,9 @@ export class CreateGoatDto {
     @IsNumber()
     fatherId?: number | null;
 
+    @IsOptional()
     @IsString()
-    partition: string;
+    orgName?: string;
 
     @IsString()
     site: string;
@@ -136,4 +137,8 @@ export class CreateGoatDto {
     @IsOptional()
     @IsMongoId()
     dam?: Types.ObjectId;
+
+    @IsOptional()
+    @IsMongoId()
+    orgId?: Types.ObjectId | string;
 }

@@ -87,20 +87,34 @@ export class GoatService {
         }
 
         try {
-            // 2. Optimization: Check for both duplicates in ONE database query
-            const existingGoat = await this.goatModel.findOne({
-                $or: [
-                    { tagId: createGoatDto.tagId },
-                    { animalName: createGoatDto.animalName }
-                ]
-            }).exec();
+            // 2. Optimization: Check for duplicate tagId or animalName within the same organization
+            if (createGoatDto.orgId) {
+                const orgObjectId = Types.ObjectId.isValid(createGoatDto.orgId as any)
+                    ? new Types.ObjectId(createGoatDto.orgId as any)
+                    : createGoatDto.orgId;
 
-            if (existingGoat) {
-                if (existingGoat.tagId === createGoatDto.tagId) {
-                    throw new ConflictException(`Goat with tag ID ${createGoatDto.tagId} already exists`);
-                }
-                if (existingGoat.animalName === createGoatDto.animalName) {
-                    throw new ConflictException(`Goat with name ${createGoatDto.animalName} already exists`);
+                const existingGoat = await this.goatModel.findOne({
+                    $or: [
+                        { orgId: orgObjectId },
+                        { orgId: createGoatDto.orgId }
+                    ],
+                    $and: [
+                        {
+                            $or: [
+                                { tagId: createGoatDto.tagId },
+                                { animalName: createGoatDto.animalName }
+                            ]
+                        }
+                    ]
+                }).exec();
+
+                if (existingGoat) {
+                    if (existingGoat.tagId === createGoatDto.tagId) {
+                        throw new ConflictException(`Goat with tag ID ${createGoatDto.tagId} already exists in this organization`);
+                    }
+                    if (existingGoat.animalName === createGoatDto.animalName) {
+                        throw new ConflictException(`Goat with name ${createGoatDto.animalName} already exists in this organization`);
+                    }
                 }
             }
 
@@ -120,8 +134,8 @@ export class GoatService {
 
             // MongoDB duplicate key error fallback (in case of concurrent race conditions)
             if (error.code === 11000) {
-                const field = Object.keys(error.keyPattern)[0];
-                throw new ConflictException(`Goat with this ${field} already exists`);
+                const field = Object.keys(error.keyPattern || {})[0] || 'field';
+                throw new ConflictException(`Goat with this ${field} already exists in this organization`);
             }
 
             throw new InternalServerErrorException('Failed to save goat to database');
@@ -130,28 +144,17 @@ export class GoatService {
 
     async findAll(orgId?: string): Promise<any[]> {
         try {
-            let query: any = {};
-            if (orgId) {
-                if (Types.ObjectId.isValid(orgId)) {
-                    query = {
-                        $or: [
-                            { orgId: new Types.ObjectId(orgId) },
-                            { orgId: orgId },
-                            { orgId: { $exists: false } },
-                            { orgId: null }
-                        ]
-                    };
-                } else {
-                    query = {
-                        $or: [
-                            { orgId: orgId },
-                            { orgId: { $exists: false } },
-                            { orgId: null }
-                        ]
-                    };
-                }
+            if (!orgId) {
+                return [];
             }
-            const goats = await this.goatModel.find(query).lean();
+
+            const orgObjectId = Types.ObjectId.isValid(orgId) ? new Types.ObjectId(orgId) : orgId;
+            const goats = await this.goatModel.find({
+                $or: [
+                    { orgId: orgObjectId },
+                    { orgId: orgId }
+                ]
+            }).lean();
 
             // Add calculated age to response
             return goats.map((goat: any) => this.formatGoatResponse(goat));
@@ -161,9 +164,13 @@ export class GoatService {
         }
     }
 
-    async findOne(id: string): Promise<any> {
+    async findOne(id: string, orgId?: string): Promise<any> {
         try {
-            const query = Types.ObjectId.isValid(id) ? { _id: id } : { tagId: Number(id) };
+            let query: any = Types.ObjectId.isValid(id) ? { _id: id } : { tagId: Number(id) };
+            if (orgId) {
+                const orgObjectId = Types.ObjectId.isValid(orgId) ? new Types.ObjectId(orgId) : orgId;
+                query.orgId = orgObjectId;
+            }
             const goat = await this.goatModel.findOne(query).exec();
             if (!goat) {
                 throw new ConflictException(`Goat with ID or Tag ${id} not found`);
@@ -172,12 +179,16 @@ export class GoatService {
         } catch (error) {
             console.error('❌ Error finding goat:', error);
             throw error;
-        }
+		}
     }
 
-    async remove(id: string | number): Promise<any> {
+    async remove(id: string | number, orgId?: string): Promise<any> {
         try {
-            const query = (typeof id === 'string' && Types.ObjectId.isValid(id)) ? { _id: id } : { tagId: Number(id) };
+            let query: any = (typeof id === 'string' && Types.ObjectId.isValid(id)) ? { _id: id } : { tagId: Number(id) };
+            if (orgId) {
+                const orgObjectId = Types.ObjectId.isValid(orgId) ? new Types.ObjectId(orgId) : orgId;
+                query.orgId = orgObjectId;
+            }
             const deletedGoat = await this.goatModel.findOneAndDelete(query).exec();
             if (!deletedGoat) {
                 throw new ConflictException(`Goat with ID or Tag ${id} not found`);
@@ -189,9 +200,13 @@ export class GoatService {
         }
     }
 
-    async update(id: string, updateGoatDto: UpdateGoatDto): Promise<any> {
+    async update(id: string, updateGoatDto: UpdateGoatDto, orgId?: string): Promise<any> {
         try {
-            const query = Types.ObjectId.isValid(id) ? { _id: id } : { tagId: Number(id) };
+            let query: any = Types.ObjectId.isValid(id) ? { _id: id } : { tagId: Number(id) };
+            if (orgId) {
+                const orgObjectId = Types.ObjectId.isValid(orgId) ? new Types.ObjectId(orgId) : orgId;
+                query.orgId = orgObjectId;
+            }
             const existingGoat = await this.goatModel.findOne(query).exec();
             if (!existingGoat) {
                 throw new ConflictException(`Goat with ID or Tag ${id} not found`);

@@ -4,10 +4,10 @@ import { Document, Types } from 'mongoose';
 @Schema({ timestamps: true })
 export class Goat extends Document {
 
-    @Prop({ type: Types.ObjectId, ref: 'Organisation', required: false })
+    @Prop({ type: Types.ObjectId, ref: 'Organisation', required: true })
     orgId: Types.ObjectId;
 
-    @Prop({ required: true, unique: true })
+    @Prop({ required: true })
     animalName: string;
 
     @Prop({ required: true, enum: ['Male', 'Female'] })
@@ -31,7 +31,7 @@ export class Goat extends Document {
     @Prop({ required: false, enum: [1, 2, 3, 4, 5] })
     kiddingCapacity: number;
 
-    @Prop({ required: true, unique: true })
+    @Prop({ required: true })
     tagId: number;
 
     @Prop({ required: true })
@@ -46,8 +46,8 @@ export class Goat extends Document {
     @Prop({ required: false })
     fatherId: number;
 
-    @Prop({ required: true })
-    partition: string;
+    @Prop({ required: false })
+    orgName: string;
 
     @Prop({ required: true })
     site: string;
@@ -66,3 +66,5 @@ export class Goat extends Document {
 }
 
 export const GoatSchema = SchemaFactory.createForClass(Goat);
+GoatSchema.index({ orgId: 1, tagId: 1 }, { unique: true });
+GoatSchema.index({ orgId: 1, animalName: 1 }, { unique: true });
