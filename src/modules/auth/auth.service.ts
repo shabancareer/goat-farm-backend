@@ -240,6 +240,12 @@ export class AuthService {
         };
     }
 
+    async getMe(userId: string) {
+        const user = await this.userModel.findById(userId).exec();
+        if (!user) throw new NotFoundException('User not found');
+        return this.buildUserResponse(user);
+    }
+
     async listOrgUsers(actor: RequestUser) {
         const users = await this.userModel
             .find({ orgId: new Types.ObjectId(actor.orgId) })

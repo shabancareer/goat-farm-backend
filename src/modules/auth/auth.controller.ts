@@ -141,7 +141,7 @@ export class AuthController {
      */
     @Get('me')
     getMe(@CurrentUser() user: RequestUser) {
-        return user;
+        return this.authService.getMe(user.id);
     }
 
     // ── User management (Owner and above) ─────────────────────────────────────
